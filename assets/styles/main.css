@@ -1,0 +1,113 @@
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap');
+
+/* Do not set direction: rtl on html/body/.stApp */
+html,
+body,
+.stApp {
+    font-family: "Vazirmatn", sans-serif !important;
+}
+
+/* Main content */
+[data-testid="stMain"] .block-container {
+    direction: rtl;
+    text-align: right;
+    font-family: "Vazirmatn", sans-serif !important;
+}
+
+/* Main text */
+[data-testid="stMain"] h1,
+[data-testid="stMain"] h2,
+[data-testid="stMain"] h3,
+[data-testid="stMain"] h4,
+[data-testid="stMain"] h5,
+[data-testid="stMain"] h6,
+[data-testid="stMain"] p,
+[data-testid="stMain"] label {
+    font-family: "Vazirmatn", sans-serif !important;
+    text-align: right;
+}
+
+/* Sidebar container */
+[data-testid="stSidebar"] {
+    font-family: "Vazirmatn", sans-serif !important;
+}
+
+/* Sidebar content: keep it visually left-aligned for now */
+[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+    direction: ltr;
+    text-align: left;
+    font-family: "Vazirmatn", sans-serif !important;
+}
+
+/* Sidebar navigation links */
+[data-testid="stSidebarNav"] {
+    direction: ltr;
+    text-align: left;
+    font-family: "Vazirmatn", sans-serif !important;
+}
+
+[data-testid="stSidebarNav"] a {
+    direction: ltr;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    font-family: "Vazirmatn", sans-serif !important;
+}
+
+[data-testid="stSidebarNav"] a span,
+[data-testid="stSidebarNav"] a p,
+[data-testid="stSidebarNav"] a div {
+    text-align: left !important;
+    font-family: "Vazirmatn", sans-serif !important;
+}
+
+/* Inputs */
+input,
+textarea {
+    direction: rtl !important;
+    text-align: right !important;
+    font-family: "Vazirmatn", sans-serif !important;
+}
+
+/* Selectbox / multiselect */
+[data-baseweb="select"] {
+    direction: rtl;
+    text-align: right;
+    font-family: "Vazirmatn", sans-serif !important;
+}
+
+/* Tables and dataframes */
+[data-testid="stDataFrame"],
+[data-testid="stTable"] {
+    direction: rtl;
+}
+
+/* Normal Streamlit buttons, but not internal sidebar icon buttons */
+[data-testid="stMain"] button {
+    font-family: "Vazirmatn", sans-serif !important;
+}
+
+/* Keep sidebar collapse/expand buttons untouched */
+[data-testid="stSidebar"] button,
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapsedControl"] {
+    direction: ltr !important;
+    text-align: center !important;
+}
+
+/* Force collapse/expand icon font */
+[data-testid="stSidebarCollapseButton"] span,
+[data-testid="stSidebarCollapsedControl"] span {
+    font-family: "Material Symbols Rounded" !important;
+    direction: ltr !important;
+    text-align: center !important;
+}
+
+/* General material icon protection */
+.material-symbols-rounded,
+.material-symbols-outlined,
+.material-symbols-sharp,
+span[class*="material-symbols"] {
+    font-family: "Material Symbols Rounded" !important;
+    direction: ltr !important;
+    text-align: center !important;
+}
