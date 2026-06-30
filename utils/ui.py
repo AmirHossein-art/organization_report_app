@@ -2,6 +2,11 @@ from pathlib import Path
 
 import streamlit as st
 
+try:
+    from streamlit_cookies_controller import RemoveEmptyElementContainer
+except Exception:
+    RemoveEmptyElementContainer = None
+
 
 def load_css():
     css_path = Path("assets/styles/main.css")
@@ -25,3 +30,6 @@ def setup_page(
         initial_sidebar_state=sidebar_state,
     )
     load_css()
+
+    if RemoveEmptyElementContainer:
+        RemoveEmptyElementContainer()

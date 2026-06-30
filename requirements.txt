@@ -7,3 +7,6 @@ openpyxl
 plotly
 bcrypt
 alembic
+streamlit-cookies-controller
+itsdangerous
+jdatetime

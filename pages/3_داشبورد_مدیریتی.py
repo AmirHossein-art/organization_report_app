@@ -1,5 +1,6 @@
 import streamlit as st
 
+from utils.auth import require_manager, show_user_sidebar
 from utils.ui import setup_page
 
 
@@ -10,5 +11,11 @@ setup_page(
 )
 
 
+require_manager()
+show_user_sidebar()
+
 st.title("داشبورد مدیریتی")
-st.write("اینجا داشبورد مدیر و KPIها نمایش داده می‌شود.")
+
+st.success("شما با نقش مدیر وارد شده‌اید.")
+
+st.write("در این صفحه بعداً گزارش‌ها، پروژه‌ها، KPIها و خروجی‌ها نمایش داده می‌شوند.")
