@@ -4,6 +4,12 @@ from utils.db import Base, engine
 from models.user import User
 from models.project import Project
 from models.report import Report
+from models.deadline_setting import DeadlineSetting
+
+try:
+    from models.report_file import ReportFile
+except Exception:
+    ReportFile = None
 
 
 def main():

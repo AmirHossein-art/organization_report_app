@@ -4,6 +4,10 @@ from utils.auth import current_user, require_login, show_user_sidebar
 from utils.project_service import get_active_projects
 from utils.report_service import create_report
 from utils.ui import setup_page
+from utils.file_service import save_uploaded_files
+
+from utils.deadline_service import get_report_timing_status
+from utils.format_helpers import to_jalali_datetime
 
 
 setup_page(
@@ -92,6 +96,13 @@ with st.form("submit_report_form"):
         placeholder="شاخص‌های مرتبط با پروژه یا گزارش را وارد کنید.",
     )
 
+    uploaded_files = st.file_uploader(
+        "فایل‌های پیوست گزارش",
+        type=["pdf", "doc", "docx", "xls", "xlsx"],
+        accept_multiple_files=True,
+        help="فرمت‌های مجاز: PDF، Word و Excel",
+    )
+
     submitted = st.form_submit_button("ثبت گزارش")
 
 
@@ -99,7 +110,7 @@ if submitted:
     selected_report_type = report_type_options[selected_report_type_label]
     selected_project_id = project_options[selected_project_title]
 
-    success, message = create_report(
+    success, message, report_id = create_report(
         user_id=user["id"],
         project_id=selected_project_id,
         report_type=selected_report_type,
@@ -112,6 +123,19 @@ if submitted:
     )
 
     if success:
-        st.success(message)
+        if uploaded_files:
+            files_success, files_message = save_uploaded_files(
+                report_id=report_id,
+                uploaded_files=uploaded_files,
+            )
+
+            if files_success:
+                st.success(f"{message} {files_message}")
+            else:
+                st.warning(
+                    f"{message} اما در ذخیره فایل‌ها مشکل وجود داشت: {files_message}"
+                )
+        else:
+            st.success(message)
     else:
         st.error(message)

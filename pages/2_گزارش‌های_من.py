@@ -1,5 +1,8 @@
 from html import escape
 
+from pathlib import Path
+from utils.file_service import format_file_size
+
 import pandas as pd
 import streamlit as st
 
@@ -11,8 +14,10 @@ from utils.format_helpers import (
     to_jalali_datetime,
     to_persian_digits,
 )
-from utils.report_service import get_reports_by_user
 from utils.ui import setup_page
+
+from utils.project_service import get_active_projects
+from utils.report_service import get_reports_by_user, update_report
 
 
 setup_page(
@@ -30,6 +35,23 @@ user = current_user()
 st.title("گزارش‌های من")
 
 reports = get_reports_by_user(user["id"])
+
+active_projects = get_active_projects()
+
+project_options = {
+    project["title"]: project["id"]
+    for project in active_projects
+}
+
+report_type_options = {
+    "هفتگی": "weekly",
+    "ماهانه": "monthly",
+}
+
+reverse_report_type_options = {
+    "weekly": "هفتگی",
+    "monthly": "ماهانه",
+}
 
 if not reports:
     st.info("هنوز گزارشی ثبت نکرده‌اید.")
@@ -155,6 +177,36 @@ if not filtered_reports:
 # -----------------------------
 # Summary table
 # -----------------------------
+
+def render_rtl_table(df: pd.DataFrame) -> str:
+    columns = list(df.columns)
+
+    header_html = "".join(
+        f"<th>{escape(str(column))}</th>"
+        for column in columns
+    )
+
+    rows_html = ""
+
+    for _, row in df.iterrows():
+        cells_html = "".join(
+            f"<td>{escape(str(row[column]))}</td>"
+            for column in columns
+        )
+
+        rows_html += f"<tr>{cells_html}</tr>"
+
+    return f"""
+    <table class="rtl-custom-table">
+        <thead>
+            <tr>{header_html}</tr>
+        </thead>
+        <tbody>
+            {rows_html}
+        </tbody>
+    </table>
+    """
+
 reports_df = pd.DataFrame(filtered_reports)
 
 reports_df["نوع گزارش"] = reports_df["report_type"].apply(report_type_label)
@@ -181,18 +233,20 @@ display_df = reports_df[
     }
 )
 
-st.dataframe(
-    display_df,
-    use_container_width=True,
-    hide_index=True,
-    column_order=[
-        "تاریخ ثبت",
-        "وضعیت",
-        "دوره",
-        "نوع گزارش",
-        "پروژه",
+display_df = display_df[
+    [
         "شناسه",
-    ],
+        "پروژه",
+        "نوع گزارش",
+        "دوره",
+        "وضعیت",
+        "تاریخ ثبت",
+    ]
+]
+
+st.markdown(
+    render_rtl_table(display_df),
+    unsafe_allow_html=True,
 )
 
 
@@ -247,9 +301,14 @@ for report in filtered_reports:
     submitted_at = to_jalali_datetime(report["submitted_at"])
     report_id = to_persian_digits(report["id"])
 
+    report_flash = st.session_state.get("report_edit_flash")
+    should_expand = bool(
+        report_flash and report_flash.get("report_id") == report["id"]
+    )
+
     with st.expander(
         f"{report['project_title']} - {report_type} - {period}",
-        expanded=False,
+        expanded=should_expand,
     ):
         with st.container(border=True):
             st.markdown(f"### {report['project_title']}")
@@ -302,3 +361,169 @@ for report in filtered_reports:
                     "شاخص‌ها",
                     report["kpi_text"],
                 )
+
+            files = report.get("files", [])
+
+            if files:
+                st.markdown("#### فایل‌های پیوست")
+
+                for file in files:
+                    file_path = Path(file["file_path"])
+
+                    if file_path.exists():
+                        with open(file_path, "rb") as f:
+                            file_bytes = f.read()
+
+                        st.download_button(
+                            label=f"دانلود {file['original_filename']} ({format_file_size(file['file_size'])})",
+                            data=file_bytes,
+                            file_name=file["original_filename"],
+                            mime="application/octet-stream",
+                            key=f"download_file_{file['id']}",
+                        )
+                    else:
+                        st.warning(f"فایل «{file['original_filename']}» در مسیر ذخیره‌شده پیدا نشد.")
+            else:
+                st.info("برای این گزارش فایل پیوستی ثبت نشده است.")
+
+            st.divider()
+
+            st.markdown("#### ویرایش گزارش")
+
+            st.info(
+                "فعلاً تا زمان پیاده‌سازی ددلاین، ویرایش گزارش فعال است. "
+                "بعداً این امکان فقط تا پایان مهلت مجاز گزارش‌دهی در دسترس خواهد بود."
+            )
+
+            current_project_title = report["project_title"]
+
+            if current_project_title not in project_options:
+                st.warning(
+                    "پروژه این گزارش در حال حاضر غیرفعال است. "
+                    "برای ویرایش، باید یک پروژه فعال انتخاب کنید."
+                )
+
+            project_titles = list(project_options.keys())
+
+            if current_project_title in project_titles:
+                default_project_index = project_titles.index(current_project_title)
+            else:
+                default_project_index = 0
+
+            report_type_labels = list(report_type_options.keys())
+            current_report_type_label = reverse_report_type_options.get(
+                report["report_type"],
+                "هفتگی",
+            )
+
+            if current_report_type_label in report_type_labels:
+                default_report_type_index = report_type_labels.index(current_report_type_label)
+            else:
+                default_report_type_index = 0
+
+            with st.form(f"edit_report_form_{report['id']}"):
+                edit_col1, edit_col2 = st.columns(2)
+
+                with edit_col1:
+                    edited_report_type_label = st.selectbox(
+                        "نوع گزارش",
+                        options=report_type_labels,
+                        index=default_report_type_index,
+                        key=f"edit_report_type_{report['id']}",
+                    )
+
+                with edit_col2:
+                    edited_project_title = st.selectbox(
+                        "پروژه",
+                        options=project_titles,
+                        index=default_project_index,
+                        key=f"edit_project_{report['id']}",
+                    )
+
+                date_col1, date_col2 = st.columns(2)
+
+                with date_col1:
+                    edited_period_start = st.date_input(
+                        "تاریخ شروع دوره",
+                        value=report["period_start"],
+                        key=f"edit_period_start_{report['id']}",
+                    )
+
+                with date_col2:
+                    edited_period_end = st.date_input(
+                        "تاریخ پایان دوره",
+                        value=report["period_end"],
+                        key=f"edit_period_end_{report['id']}",
+                    )
+
+                edited_activities_done = st.text_area(
+                    "فعالیت‌های انجام‌شده",
+                    value=report["activities_done"],
+                    height=130,
+                    key=f"edit_activities_{report['id']}",
+                )
+
+                edited_results_achieved = st.text_area(
+                    "نتایج حاصل‌شده",
+                    value=report["results_achieved"],
+                    height=130,
+                    key=f"edit_results_{report['id']}",
+                )
+
+                edited_next_actions = st.text_area(
+                    "اقدامات آتی",
+                    value=report["next_actions"],
+                    height=130,
+                    key=f"edit_next_actions_{report['id']}",
+                )
+
+                edited_kpi_text = st.text_area(
+                    "شاخص‌ها",
+                    value=report["kpi_text"],
+                    height=130,
+                    key=f"edit_kpi_{report['id']}",
+                )
+
+                save_edit = st.form_submit_button("ذخیره ویرایش گزارش")
+
+                report_flash = st.session_state.get("report_edit_flash")
+
+                if report_flash and report_flash.get("report_id") == report["id"]:
+                    if report_flash.get("type") == "success":
+                        st.success(report_flash.get("message"))
+                    else:
+                        st.error(report_flash.get("message"))
+
+                    st.session_state.pop("report_edit_flash", None)
+
+            if save_edit:
+                edited_report_type = report_type_options[edited_report_type_label]
+                edited_project_id = project_options[edited_project_title]
+
+                success, message = update_report(
+                    report_id=report["id"],
+                    user_id=user["id"],
+                    project_id=edited_project_id,
+                    report_type=edited_report_type,
+                    period_start=edited_period_start,
+                    period_end=edited_period_end,
+                    activities_done=edited_activities_done,
+                    results_achieved=edited_results_achieved,
+                    next_actions=edited_next_actions,
+                    kpi_text=edited_kpi_text,
+                )
+
+                if success:
+                    st.session_state["report_edit_flash"] = {
+                        "report_id": report["id"],
+                        "type": "success",
+                        "message": "تغییرات گزارش با موفقیت ذخیره شد.",
+                    }
+                    st.rerun()
+                else:
+                    st.session_state["report_edit_flash"] = {
+                        "report_id": report["id"],
+                        "type": "error",
+                        "message": message,
+                    }
+                    st.rerun()

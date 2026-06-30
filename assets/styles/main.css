@@ -358,3 +358,97 @@ span[class*="material-symbols"] {
     white-space: pre-wrap;
 }
 
+/* RTL custom table */
+.rtl-custom-table {
+    width: 100%;
+    direction: rtl;
+    text-align: right;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: "Vazirmatn", sans-serif !important;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 12px;
+}
+
+.rtl-custom-table th {
+    font-family: "Vazirmatn", sans-serif !important;
+    text-align: right;
+    font-size: 14px;
+    font-weight: 800;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.055);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.rtl-custom-table td {
+    font-family: "Vazirmatn", sans-serif !important;
+    text-align: right;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 14px 16px;
+    line-height: 1.9;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rtl-custom-table tr:last-child td {
+    border-bottom: none;
+}
+
+.rtl-custom-table tr:hover td {
+    background: rgba(255, 255, 255, 0.035);
+}
+
+/* Global RTL bullets inside main content */
+section.main .block-container ul,
+section.main .block-container ol,
+[data-testid="stMain"] .block-container ul,
+[data-testid="stMain"] .block-container ol {
+    direction: rtl !important;
+    text-align: right !important;
+    padding-right: 1.5rem !important;
+    padding-left: 0 !important;
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+}
+
+section.main .block-container li,
+[data-testid="stMain"] .block-container li {
+    direction: rtl !important;
+    text-align: right !important;
+    padding-right: 0.25rem !important;
+    padding-left: 0 !important;
+    margin-bottom: 0.4rem !important;
+}
+
+section.main .block-container li::marker,
+[data-testid="stMain"] .block-container li::marker {
+    direction: rtl !important;
+}
+
+/* Status chips */
+.status-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    direction: rtl;
+    text-align: center;
+    font-family: "Vazirmatn", sans-serif !important;
+    font-size: 13px;
+    font-weight: 800;
+    padding: 7px 12px;
+    border-radius: 999px;
+    margin-bottom: 12px;
+}
+
+.status-chip-active {
+    color: #d7ffe5;
+    background: rgba(34, 197, 94, 0.18);
+    border: 1px solid rgba(34, 197, 94, 0.45);
+}
+
+.status-chip-inactive {
+    color: #ffe4e6;
+    background: rgba(244, 63, 94, 0.16);
+    border: 1px solid rgba(244, 63, 94, 0.45);
+}
