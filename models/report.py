@@ -11,6 +11,7 @@ class Report(Base):
 
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    period_id = Column(Integer, ForeignKey("report_periods.id"), nullable=True, index=True)
 
     report_type = Column(String(20), nullable=False)  # weekly / monthly
 
@@ -32,3 +33,4 @@ class Report(Base):
 
     user = relationship("User")
     project = relationship("Project")
+    period = relationship("ReportPeriod")

@@ -1,6 +1,8 @@
 from datetime import date
 from utils.file_service import get_files_by_report_id
 from utils.deadline_service import get_report_timing_status
+from models.report_period import ReportPeriod
+from utils.user_project_service import user_has_project_access
 
 from models.project import Project
 from models.report import Report
@@ -47,6 +49,9 @@ def create_report(
 
         is_late = timing_status["is_late"]
         status = "late" if is_late else "submitted"
+
+        if not user_has_project_access(db, user_id, project_id):
+            return False, "شما برای این پروژه دسترسی ثبت گزارش ندارید.", None
 
         report = Report(
             user_id=user_id,
@@ -96,6 +101,7 @@ def get_reports_by_user(user_id: int) -> list[dict]:
                     "id": report.id,
                     "user_id": report.user_id,
                     "project_id": report.project_id,
+                    "period_id": report.period_id,
                     "project_title": project.title,
                     "report_type": report.report_type,
                     "period_start": report.period_start,
@@ -120,9 +126,6 @@ def update_report(
     report_id: int,
     user_id: int,
     project_id: int,
-    report_type: str,
-    period_start: date,
-    period_end: date,
     activities_done: str | None,
     results_achieved: str | None,
     next_actions: str | None,
@@ -151,17 +154,9 @@ def update_report(
         if not project:
             return False, "پروژه انتخاب‌شده فعال نیست یا وجود ندارد."
 
-        if report_type not in ["weekly", "monthly"]:
-            return False, "نوع گزارش معتبر نیست."
-
-        if period_start > period_end:
-            return False, "تاریخ شروع دوره نمی‌تواند بعد از تاریخ پایان باشد."
-
-        # بررسی مهلت مجاز ثبت و ویرایش بر اساس تنظیمات ددلاین
-        
         timing_status = get_report_timing_status(
-            report_type=report_type,
-            period_end=period_end,
+            report_type=report.report_type,
+            period_end=report.period_end,
         )
 
         if not timing_status["can_submit_or_edit"]:
@@ -170,15 +165,14 @@ def update_report(
         is_late = timing_status["is_late"]
         status = "late" if is_late else "submitted"
 
+        if not user_has_project_access(db, user_id, project_id):
+            return False, "شما برای این پروژه دسترسی ویرایش گزارش ندارید."
+
         report.project_id = project_id
-        report.report_type = report_type
-        report.period_start = period_start
-        report.period_end = period_end
         report.activities_done = activities_done.strip() if activities_done else None
         report.results_achieved = results_achieved.strip() if results_achieved else None
         report.next_actions = next_actions.strip() if next_actions else None
         report.kpi_text = kpi_text.strip() if kpi_text else None
-
         report.status = status
         report.is_late = is_late
 
@@ -189,6 +183,89 @@ def update_report(
     except Exception as e:
         db.rollback()
         return False, f"خطا در ویرایش گزارش: {e}"
+
+    finally:
+        db.close()
+
+def create_report(
+    user_id: int,
+    project_id: int,
+    report_type: str,
+    period_id: int,
+    activities_done: str | None,
+    results_achieved: str | None,
+    next_actions: str | None,
+    kpi_text: str | None,
+) -> tuple[bool, str, int | None]:
+    db = SessionLocal()
+
+    try:
+        project = (
+            db.query(Project)
+            .filter(Project.id == project_id)
+            .filter(Project.is_active == True)
+            .first()
+        )
+
+        if not project:
+            return False, "پروژه انتخاب‌شده فعال نیست یا وجود ندارد.", None
+
+        if report_type not in ["weekly", "monthly"]:
+            return False, "نوع گزارش معتبر نیست.", None
+
+        period = (
+            db.query(ReportPeriod)
+            .filter(ReportPeriod.id == period_id)
+            .filter(ReportPeriod.is_active == True)
+            .first()
+        )
+
+        if not period:
+            return False, "بازه گزارش انتخاب‌شده فعال نیست یا وجود ندارد.", None
+
+        if period.report_type != report_type:
+            return False, "بازه انتخاب‌شده با نوع گزارش هماهنگ نیست.", None
+
+        today = date.today()
+
+        if today < period.period_start:
+            return False, "این بازه گزارش هنوز شروع نشده است.", None
+
+        timing_status = get_report_timing_status(
+            report_type=report_type,
+            period_end=period.period_end,
+        )
+
+        if not timing_status["can_submit_or_edit"]:
+            return False, timing_status["message"], None
+
+        is_late = timing_status["is_late"]
+        status = "late" if is_late else "submitted"
+
+        report = Report(
+            user_id=user_id,
+            project_id=project_id,
+            period_id=period.id,
+            report_type=report_type,
+            period_start=period.period_start,
+            period_end=period.period_end,
+            activities_done=activities_done.strip() if activities_done else None,
+            results_achieved=results_achieved.strip() if results_achieved else None,
+            next_actions=next_actions.strip() if next_actions else None,
+            kpi_text=kpi_text.strip() if kpi_text else None,
+            status=status,
+            is_late=is_late,
+        )
+
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+
+        return True, "گزارش با موفقیت ثبت شد.", report.id
+
+    except Exception as e:
+        db.rollback()
+        return False, f"خطا در ثبت گزارش: {e}", None
 
     finally:
         db.close()

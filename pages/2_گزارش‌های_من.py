@@ -16,9 +16,9 @@ from utils.format_helpers import (
 )
 from utils.ui import setup_page
 
-from utils.project_service import get_active_projects
+from utils.user_project_service import get_assigned_projects_for_user
 from utils.report_service import get_reports_by_user, update_report
-
+from utils.deadline_service import get_report_timing_status
 
 setup_page(
     title="گزارش‌های من",
@@ -36,12 +36,14 @@ st.title("گزارش‌های من")
 
 reports = get_reports_by_user(user["id"])
 
-active_projects = get_active_projects()
+assigned_projects = get_assigned_projects_for_user(user["id"])
 
 project_options = {
     project["title"]: project["id"]
-    for project in active_projects
+    for project in assigned_projects
 }
+
+project_titles = list(project_options.keys())
 
 report_type_options = {
     "هفتگی": "weekly",
@@ -390,128 +392,123 @@ for report in filtered_reports:
 
             st.markdown("#### ویرایش گزارش")
 
-            st.info(
-                "فعلاً تا زمان پیاده‌سازی ددلاین، ویرایش گزارش فعال است. "
-                "بعداً این امکان فقط تا پایان مهلت مجاز گزارش‌دهی در دسترس خواهد بود."
+            # پیام موفقیت یا خطای ویرایش، بعد از rerun همین‌جا نمایش داده می‌شود
+            report_flash = st.session_state.get("report_edit_flash")
+
+            if report_flash and report_flash.get("report_id") == report["id"]:
+                if report_flash.get("type") == "success":
+                    st.success(report_flash.get("message"))
+                else:
+                    st.error(report_flash.get("message"))
+
+                st.session_state.pop("report_edit_flash", None)
+
+
+            # بررسی اینکه این گزارش هنوز در مهلت مجاز ویرایش هست یا نه
+            timing_status = get_report_timing_status(
+                report_type=report["report_type"],
+                period_end=report["period_end"],
             )
 
-            current_project_title = report["project_title"]
+            if not timing_status["can_submit_or_edit"]:
+                st.warning(timing_status["message"])
 
-            if current_project_title not in project_options:
-                st.warning(
-                    "پروژه این گزارش در حال حاضر غیرفعال است. "
-                    "برای ویرایش، باید یک پروژه فعال انتخاب کنید."
-                )
+                deadline_at = timing_status.get("deadline_at")
+                closes_at = timing_status.get("closes_at")
 
-            project_titles = list(project_options.keys())
+                if deadline_at and closes_at:
+                    st.caption(
+                        f"مهلت اصلی: {to_jalali_datetime(deadline_at)} | "
+                        f"زمان قفل شدن نهایی: {to_jalali_datetime(closes_at)}"
+                    )
 
-            if current_project_title in project_titles:
-                default_project_index = project_titles.index(current_project_title)
             else:
-                default_project_index = 0
+                current_project_title = report["project_title"]
+                project_titles = list(project_options.keys())
 
-            report_type_labels = list(report_type_options.keys())
-            current_report_type_label = reverse_report_type_options.get(
-                report["report_type"],
-                "هفتگی",
-            )
-
-            if current_report_type_label in report_type_labels:
-                default_report_type_index = report_type_labels.index(current_report_type_label)
-            else:
-                default_report_type_index = 0
-
-            with st.form(f"edit_report_form_{report['id']}"):
-                edit_col1, edit_col2 = st.columns(2)
-
-                with edit_col1:
-                    edited_report_type_label = st.selectbox(
-                        "نوع گزارش",
-                        options=report_type_labels,
-                        index=default_report_type_index,
-                        key=f"edit_report_type_{report['id']}",
+                if not project_titles:
+                    st.warning(
+                        "هیچ پروژه فعالی برای شما تعریف نشده است. "
+                        "امکان ویرایش پروژه گزارش وجود ندارد."
                     )
 
-                with edit_col2:
-                    edited_project_title = st.selectbox(
-                        "پروژه",
-                        options=project_titles,
-                        index=default_project_index,
-                        key=f"edit_project_{report['id']}",
-                    )
+                else:
+                    if current_project_title not in project_options:
+                        st.warning(
+                            "پروژه این گزارش در حال حاضر جزو پروژه‌های مجاز یا فعال شما نیست. "
+                            "برای ذخیره ویرایش، باید یکی از پروژه‌های مجاز خود را انتخاب کنید."
+                        )
 
-                date_col1, date_col2 = st.columns(2)
-
-                with date_col1:
-                    edited_period_start = st.date_input(
-                        "تاریخ شروع دوره",
-                        value=report["period_start"],
-                        key=f"edit_period_start_{report['id']}",
-                    )
-
-                with date_col2:
-                    edited_period_end = st.date_input(
-                        "تاریخ پایان دوره",
-                        value=report["period_end"],
-                        key=f"edit_period_end_{report['id']}",
-                    )
-
-                edited_activities_done = st.text_area(
-                    "فعالیت‌های انجام‌شده",
-                    value=report["activities_done"],
-                    height=130,
-                    key=f"edit_activities_{report['id']}",
-                )
-
-                edited_results_achieved = st.text_area(
-                    "نتایج حاصل‌شده",
-                    value=report["results_achieved"],
-                    height=130,
-                    key=f"edit_results_{report['id']}",
-                )
-
-                edited_next_actions = st.text_area(
-                    "اقدامات آتی",
-                    value=report["next_actions"],
-                    height=130,
-                    key=f"edit_next_actions_{report['id']}",
-                )
-
-                edited_kpi_text = st.text_area(
-                    "شاخص‌ها",
-                    value=report["kpi_text"],
-                    height=130,
-                    key=f"edit_kpi_{report['id']}",
-                )
-
-                save_edit = st.form_submit_button("ذخیره ویرایش گزارش")
-
-                report_flash = st.session_state.get("report_edit_flash")
-
-                if report_flash and report_flash.get("report_id") == report["id"]:
-                    if report_flash.get("type") == "success":
-                        st.success(report_flash.get("message"))
+                    if current_project_title in project_titles:
+                        default_project_index = project_titles.index(current_project_title)
                     else:
-                        st.error(report_flash.get("message"))
+                        default_project_index = 0
 
-                    st.session_state.pop("report_edit_flash", None)
+                    with st.form(f"edit_report_form_{report['id']}"):
+                        edited_project_title = st.selectbox(
+                            "پروژه",
+                            options=project_titles,
+                            index=default_project_index,
+                            key=f"edit_project_{report['id']}",
+                        )
 
-            if save_edit:
-                edited_report_type = report_type_options[edited_report_type_label]
-                edited_project_id = project_options[edited_project_title]
+                        edited_activities_done = st.text_area(
+                            "فعالیت‌های انجام‌شده",
+                            value=report["activities_done"],
+                            height=130,
+                            key=f"edit_activities_{report['id']}",
+                        )
 
-                success, message = update_report(
-                    report_id=report["id"],
-                    user_id=user["id"],
-                    project_id=edited_project_id,
-                    report_type=edited_report_type,
-                    period_start=edited_period_start,
-                    period_end=edited_period_end,
-                    activities_done=edited_activities_done,
-                    results_achieved=edited_results_achieved,
-                    next_actions=edited_next_actions,
-                    kpi_text=edited_kpi_text,
-                )
+                        edited_results_achieved = st.text_area(
+                            "نتایج حاصل‌شده",
+                            value=report["results_achieved"],
+                            height=130,
+                            key=f"edit_results_{report['id']}",
+                        )
+
+                        edited_next_actions = st.text_area(
+                            "اقدامات آتی",
+                            value=report["next_actions"],
+                            height=130,
+                            key=f"edit_next_actions_{report['id']}",
+                        )
+
+                        edited_kpi_text = st.text_area(
+                            "شاخص‌ها",
+                            value=report["kpi_text"],
+                            height=130,
+                            key=f"edit_kpi_{report['id']}",
+                        )
+
+                        save_edit = st.form_submit_button("ذخیره ویرایش گزارش")
+
+                    if save_edit:
+                        edited_project_id = project_options[edited_project_title]
+
+                        success, message = update_report(
+                            report_id=report["id"],
+                            user_id=user["id"],
+                            project_id=edited_project_id,
+                            activities_done=edited_activities_done,
+                            results_achieved=edited_results_achieved,
+                            next_actions=edited_next_actions,
+                            kpi_text=edited_kpi_text,
+                        )
+
+                        if success:
+                            st.session_state["report_edit_flash"] = {
+                                "report_id": report["id"],
+                                "type": "success",
+                                "message": "تغییرات گزارش با موفقیت ذخیره شد.",
+                            }
+                            st.rerun()
+                        else:
+                            st.session_state["report_edit_flash"] = {
+                                "report_id": report["id"],
+                                "type": "error",
+                                "message": message,
+                            }
+                            st.rerun()
 
                 if success:
                     st.session_state["report_edit_flash"] = {

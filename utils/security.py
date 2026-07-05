@@ -2,14 +2,31 @@ import bcrypt
 
 
 def hash_password(password: str) -> str:
+    """
+    تبدیل رمز خام به رمز هش‌شده برای ذخیره در دیتابیس
+    """
     password_bytes = password.encode("utf-8")
     salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password_bytes, salt)
-    return hashed.decode("utf-8")
+    hashed_password = bcrypt.hashpw(password_bytes, salt)
+
+    return hashed_password.decode("utf-8")
 
 
-def verify_password(plain_password: str, password_hash: str) -> bool:
-    return bcrypt.checkpw(
-        plain_password.encode("utf-8"),
-        password_hash.encode("utf-8"),
-    )
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    بررسی رمز واردشده با رمز هش‌شده ذخیره‌شده در دیتابیس
+    """
+    if not plain_password or not hashed_password:
+        return False
+
+    try:
+        plain_password_bytes = plain_password.encode("utf-8")
+        hashed_password_bytes = hashed_password.encode("utf-8")
+
+        return bcrypt.checkpw(
+            plain_password_bytes,
+            hashed_password_bytes,
+        )
+
+    except Exception:
+        return False
