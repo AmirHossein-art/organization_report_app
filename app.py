@@ -6,6 +6,7 @@ from utils.auth import (
     is_logged_in,
     show_login_form,
     show_user_sidebar,
+    enforce_password_change_if_needed,
 )
 
 from utils.ui import setup_page
@@ -28,6 +29,8 @@ if not is_logged_in():
 
 
 show_user_sidebar()
+
+enforce_password_change_if_needed()
 
 user = current_user()
 

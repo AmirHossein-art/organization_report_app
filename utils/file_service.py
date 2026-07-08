@@ -1,6 +1,9 @@
 from pathlib import Path
 from uuid import uuid4
 
+from models.report import Report
+from utils.deadline_service import get_report_timing_status
+
 from models.report_file import ReportFile
 from utils.db import SessionLocal
 
@@ -113,3 +116,91 @@ def format_file_size(size_in_bytes: int | None) -> str:
         return f"{size_in_bytes / 1024:.1f} KB"
 
     return f"{size_in_bytes / (1024 * 1024):.1f} MB"
+
+def add_files_to_report_for_user(
+    report_id: int,
+    user_id: int,
+    uploaded_files,
+) -> tuple[bool, str]:
+    db = SessionLocal()
+
+    try:
+        report = (
+            db.query(Report)
+            .filter(Report.id == report_id)
+            .filter(Report.user_id == user_id)
+            .first()
+        )
+
+        if not report:
+            return False, "گزارش پیدا نشد یا شما اجازه افزودن فایل به آن را ندارید."
+
+        timing_status = get_report_timing_status(
+            report_type=report.report_type,
+            period_end=report.period_end,
+        )
+
+        if not timing_status["can_submit_or_edit"]:
+            return False, timing_status["message"]
+
+    finally:
+        db.close()
+
+    return save_uploaded_files(
+        report_id=report_id,
+        uploaded_files=uploaded_files,
+    )
+
+
+def delete_report_file_for_user(
+    file_id: int,
+    user_id: int,
+) -> tuple[bool, str]:
+    db = SessionLocal()
+
+    try:
+        file_record = (
+            db.query(ReportFile)
+            .join(Report, ReportFile.report_id == Report.id)
+            .filter(ReportFile.id == file_id)
+            .filter(Report.user_id == user_id)
+            .first()
+        )
+
+        if not file_record:
+            return False, "فایل پیدا نشد یا شما اجازه حذف آن را ندارید."
+
+        report = (
+            db.query(Report)
+            .filter(Report.id == file_record.report_id)
+            .filter(Report.user_id == user_id)
+            .first()
+        )
+
+        if not report:
+            return False, "گزارش مربوط به این فایل پیدا نشد."
+
+        timing_status = get_report_timing_status(
+            report_type=report.report_type,
+            period_end=report.period_end,
+        )
+
+        if not timing_status["can_submit_or_edit"]:
+            return False, timing_status["message"]
+
+        file_path = Path(file_record.file_path)
+
+        if file_path.exists():
+            file_path.unlink()
+
+        db.delete(file_record)
+        db.commit()
+
+        return True, "فایل پیوست با موفقیت حذف شد."
+
+    except Exception as e:
+        db.rollback()
+        return False, f"خطا در حذف فایل پیوست: {e}"
+
+    finally:
+        db.close()

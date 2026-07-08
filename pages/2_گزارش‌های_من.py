@@ -1,7 +1,12 @@
 from html import escape
 
 from pathlib import Path
-from utils.file_service import format_file_size
+
+from utils.file_service import (
+    add_files_to_report_for_user,
+    delete_report_file_for_user,
+    format_file_size,
+)
 
 import pandas as pd
 import streamlit as st
@@ -20,6 +25,7 @@ from utils.user_project_service import get_assigned_projects_for_user
 from utils.report_service import get_reports_by_user, update_report
 from utils.deadline_service import get_report_timing_status
 
+
 setup_page(
     title="گزارش‌های من",
     icon="📄",
@@ -31,6 +37,13 @@ require_login()
 show_user_sidebar()
 
 user = current_user()
+
+if user["role"] == "manager":
+    st.info(
+        "این صفحه برای مشاهده گزارش‌های شخصی کاربران است. "
+        "برای مشاهده گزارش‌های سازمان، از صفحه داشبورد مدیریتی استفاده کنید."
+    )
+    #st.stop()
 
 st.title("گزارش‌های من")
 
@@ -364,31 +377,118 @@ for report in filtered_reports:
                     report["kpi_text"],
                 )
 
+        
+            st.divider()
+
+            st.markdown("#### فایل‌های پیوست")
+
+            attachment_timing_status = get_report_timing_status(
+                report_type=report["report_type"],
+                period_end=report["period_end"],
+            )
+
+            can_manage_attachments = attachment_timing_status["can_submit_or_edit"]
+
             files = report.get("files", [])
 
             if files:
-                st.markdown("#### فایل‌های پیوست")
-
                 for file in files:
                     file_path = Path(file["file_path"])
 
-                    if file_path.exists():
-                        with open(file_path, "rb") as f:
-                            file_bytes = f.read()
+                    with st.container(border=True):
+                        st.write(f"**{file['original_filename']}**")
+                        st.caption(f"حجم فایل: {format_file_size(file['file_size'])}")
 
-                        st.download_button(
-                            label=f"دانلود {file['original_filename']} ({format_file_size(file['file_size'])})",
-                            data=file_bytes,
-                            file_name=file["original_filename"],
-                            mime="application/octet-stream",
-                            key=f"download_file_{file['id']}",
-                        )
-                    else:
-                        st.warning(f"فایل «{file['original_filename']}» در مسیر ذخیره‌شده پیدا نشد.")
+                        if file_path.exists():
+                            with open(file_path, "rb") as f:
+                                file_bytes = f.read()
+
+                            st.download_button(
+                                label="دانلود فایل",
+                                data=file_bytes,
+                                file_name=file["original_filename"],
+                                mime="application/octet-stream",
+                                key=f"report_{report['id']}_download_file_{file['id']}",
+                            )
+                        else:
+                            st.warning("فایل در مسیر ذخیره‌شده پیدا نشد.")
+
+                        if can_manage_attachments:
+                            confirm_delete = st.checkbox(
+                                f"حذف فایل «{file['original_filename']}» را تأیید می‌کنم",
+                                key=f"report_{report['id']}_confirm_delete_file_{file['id']}",
+                            )
+
+                            if st.button(
+                                "حذف فایل پیوست",
+                                key=f"report_{report['id']}_delete_file_{file['id']}",
+                                disabled=not confirm_delete,
+                            ):
+                                success, message = delete_report_file_for_user(
+                                    file_id=file["id"],
+                                    user_id=user["id"],
+                                )
+
+                                if success:
+                                    st.session_state["report_edit_flash"] = {
+                                        "report_id": report["id"],
+                                        "type": "success",
+                                        "message": message,
+                                    }
+                                    st.rerun()
+                                else:
+                                    st.session_state["report_edit_flash"] = {
+                                        "report_id": report["id"],
+                                        "type": "error",
+                                        "message": message,
+                                    }
+                                    st.rerun()
             else:
                 st.info("برای این گزارش فایل پیوستی ثبت نشده است.")
 
-            st.divider()
+
+            if can_manage_attachments:
+                st.markdown("#### افزودن فایل جدید")
+
+                with st.form(f"add_files_form_{report['id']}"):
+                    new_uploaded_files = st.file_uploader(
+                        "انتخاب فایل‌های جدید",
+                        type=["pdf", "doc", "docx", "xls", "xlsx"],
+                        accept_multiple_files=True,
+                        key=f"new_files_{report['id']}",
+                        help="فرمت‌های مجاز: PDF، Word و Excel",
+                    )
+
+                    add_files_submitted = st.form_submit_button("افزودن فایل‌ها")
+
+                if add_files_submitted:
+                    if not new_uploaded_files:
+                        st.warning("ابتدا حداقل یک فایل انتخاب کنید.")
+                    else:
+                        success, message = add_files_to_report_for_user(
+                            report_id=report["id"],
+                            user_id=user["id"],
+                            uploaded_files=new_uploaded_files,
+                        )
+
+                        if success:
+                            st.session_state["report_edit_flash"] = {
+                                "report_id": report["id"],
+                                "type": "success",
+                                "message": message,
+                            }
+                            st.rerun()
+                        else:
+                            st.session_state["report_edit_flash"] = {
+                                "report_id": report["id"],
+                                "type": "error",
+                                "message": message,
+                            }
+                            st.rerun()
+            else:
+                st.caption(
+                    "مهلت ویرایش این گزارش پایان یافته است؛ فایل‌های پیوست فقط قابل دانلود هستند."
+                )
 
             st.markdown("#### ویرایش گزارش")
 
@@ -509,18 +609,3 @@ for report in filtered_reports:
                                 "message": message,
                             }
                             st.rerun()
-
-                if success:
-                    st.session_state["report_edit_flash"] = {
-                        "report_id": report["id"],
-                        "type": "success",
-                        "message": "تغییرات گزارش با موفقیت ذخیره شد.",
-                    }
-                    st.rerun()
-                else:
-                    st.session_state["report_edit_flash"] = {
-                        "report_id": report["id"],
-                        "type": "error",
-                        "message": message,
-                    }
-                    st.rerun()

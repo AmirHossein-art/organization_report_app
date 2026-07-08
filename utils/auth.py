@@ -126,6 +126,7 @@ def restore_login_from_cookie():
                 "username": user.username,
                 "full_name": user.full_name,
                 "role": user.role,
+                "must_change_password": getattr(user, "must_change_password", False),
             }
 
         finally:
@@ -182,6 +183,7 @@ def authenticate_user(username: str, password: str):
             "username": user.username,
             "full_name": user.full_name,
             "role": user.role,
+            "must_change_password": getattr(user, "must_change_password", False),
         }
 
     finally:
@@ -298,6 +300,8 @@ def require_login():
         show_login_form()
         st.stop()
 
+    enforce_password_change_if_needed()
+    
 def require_manager():
     require_login()
 
@@ -305,3 +309,56 @@ def require_manager():
         st.error("شما به این صفحه دسترسی مدیریتی ندارید.")
         st.stop()
 
+def show_force_password_change_form():
+    from utils.user_service import change_own_password
+
+    user = current_user()
+
+    st.warning(
+        "برای ادامه استفاده از سامانه، باید رمز عبور موقت خود را تغییر دهید."
+    )
+
+    with st.form("force_password_change_form"):
+        current_password = st.text_input(
+            "رمز فعلی",
+            type="password",
+        )
+
+        new_password = st.text_input(
+            "رمز جدید",
+            type="password",
+        )
+
+        confirm_password = st.text_input(
+            "تکرار رمز جدید",
+            type="password",
+        )
+
+        submitted = st.form_submit_button("تغییر رمز و ادامه")
+
+    if submitted:
+        if new_password != confirm_password:
+            st.error("رمز جدید و تکرار آن یکسان نیستند.")
+            return
+
+        success, message = change_own_password(
+            user_id=user["id"],
+            current_password=current_password,
+            new_password=new_password,
+        )
+
+        if success:
+            st.session_state.user["must_change_password"] = False
+            st.success(message)
+            st.rerun()
+        else:
+            st.error(message)
+
+
+def enforce_password_change_if_needed():
+    user = current_user()
+
+    if user and user.get("must_change_password"):
+        st.title("تغییر رمز عبور")
+        show_force_password_change_form()
+        st.stop()

@@ -16,5 +16,8 @@ class User(Base):
 
     is_active = Column(Boolean, nullable=False, default=True)
 
+    must_change_password = Column(Boolean, nullable=False, default=False)
+    password_changed_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, nullable=False, server_default=func.now())
-    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
+    updated_at = Column(DateTime, nullable=True, onupdate=func.now())   

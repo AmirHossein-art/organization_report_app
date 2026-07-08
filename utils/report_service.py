@@ -153,7 +153,26 @@ def update_report(
 
         if not project:
             return False, "پروژه انتخاب‌شده فعال نیست یا وجود ندارد."
+        
+        if not user_has_project_access(db, user_id, project_id):
+            return False, "شما برای این پروژه دسترسی ویرایش گزارش ندارید."
 
+        duplicate_report = (
+            db.query(Report)
+            .filter(Report.id != report_id)
+            .filter(Report.user_id == user_id)
+            .filter(Report.project_id == project_id)
+            .filter(Report.period_id == report.period_id)
+            .first()
+        )
+
+        if duplicate_report:
+            return (
+                False,
+                "برای این پروژه و این بازه، گزارش دیگری قبلاً ثبت شده است. "
+                "امکان انتقال این گزارش به آن پروژه وجود ندارد.",
+            )
+            
         timing_status = get_report_timing_status(
             report_type=report.report_type,
             period_end=report.period_end,
@@ -230,6 +249,22 @@ def create_report(
 
         if today < period.period_start:
             return False, "این بازه گزارش هنوز شروع نشده است.", None
+        
+        existing_report = (
+            db.query(Report)
+            .filter(Report.user_id == user_id)
+            .filter(Report.project_id == project_id)
+            .filter(Report.period_id == period_id)
+            .first()
+        )
+
+        if existing_report:
+            return (
+                False,
+                "برای این پروژه و این بازه گزارش قبلاً گزارشی ثبت کرده‌اید. "
+                "برای تغییر محتوا، گزارش قبلی را از صفحه «گزارش‌های من» ویرایش کنید.",
+                None,
+            )
 
         timing_status = get_report_timing_status(
             report_type=report_type,
