@@ -110,7 +110,9 @@ def get_manager_dashboard_data(
             for report, _, _ in report_records
         ]
 
+
         file_counts = defaultdict(int)
+        files_by_report_id = defaultdict(list)
 
         if report_ids:
             file_count_records = (
@@ -125,6 +127,27 @@ def get_manager_dashboard_data(
 
             for report_id_value, count_value in file_count_records:
                 file_counts[report_id_value] = count_value
+
+            file_records = (
+                db.query(ReportFile)
+                .filter(ReportFile.report_id.in_(report_ids))
+                .order_by(ReportFile.uploaded_at.desc())
+                .all()
+            )
+
+            for file in file_records:
+                files_by_report_id[file.report_id].append(
+                    {
+                        "id": file.id,
+                        "report_id": file.report_id,
+                        "original_filename": file.original_filename,
+                        "stored_filename": file.stored_filename,
+                        "file_path": file.file_path,
+                        "file_type": file.file_type,
+                        "file_size": file.file_size,
+                        "uploaded_at": file.uploaded_at,
+                    }
+                )
 
         reports_by_user_project = {}
 
@@ -188,6 +211,7 @@ def get_manager_dashboard_data(
                         "submitted_at": report.submitted_at,
                         "has_report": True,
                         "file_count": file_counts[report.id],
+                        "files": files_by_report_id[report.id],
                         "activities_done": report.activities_done or "",
                         "results_achieved": report.results_achieved or "",
                         "next_actions": report.next_actions or "",
@@ -212,6 +236,7 @@ def get_manager_dashboard_data(
                         "submitted_at": None,
                         "has_report": False,
                         "file_count": 0,
+                        "files": [],
                         "activities_done": "",
                         "results_achieved": "",
                         "next_actions": "",
@@ -252,6 +277,7 @@ def get_manager_dashboard_data(
                     "submitted_at": report.submitted_at,
                     "has_report": True,
                     "file_count": file_counts[report.id],
+                    "files": files_by_report_id[report.id],
                     "activities_done": report.activities_done or "",
                     "results_achieved": report.results_achieved or "",
                     "next_actions": report.next_actions or "",

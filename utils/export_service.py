@@ -93,6 +93,7 @@ def build_dashboard_excel(
                 "وضعیت": row["status_label"],
                 "تاریخ ثبت": to_jalali_datetime(row["submitted_at"]) if row["submitted_at"] else "-",
                 "تعداد پیوست": to_persian_digits(row["file_count"]),
+                "فایل‌های پیوست": "، ".join([file["original_filename"] for file in row.get("files", [])]),
             }
             for row in rows
         ]
@@ -107,6 +108,7 @@ def build_dashboard_excel(
                 "وضعیت": row["status_label"],
                 "تاریخ ثبت": to_jalali_datetime(row["submitted_at"]) if row["submitted_at"] else "-",
                 "تعداد پیوست": to_persian_digits(row["file_count"]),
+                "فایل‌های پیوست": "، ".join([file["original_filename"] for file in row.get("files", [])]),
                 "فعالیت‌های انجام‌شده": row["activities_done"],
                 "نتایج حاصل‌شده": row["results_achieved"],
                 "اقدامات آتی": row["next_actions"],
@@ -137,6 +139,7 @@ def build_dashboard_excel(
                 "پروژه": row["project_title"],
                 "تاریخ ثبت": to_jalali_datetime(row["submitted_at"]) if row["submitted_at"] else "-",
                 "تعداد پیوست": to_persian_digits(row["file_count"]),
+                "فایل‌های پیوست": "، ".join([file["original_filename"] for file in row.get("files", [])]),
                 "فعالیت‌های انجام‌شده": row["activities_done"],
                 "نتایج حاصل‌شده": row["results_achieved"],
                 "اقدامات آتی": row["next_actions"],

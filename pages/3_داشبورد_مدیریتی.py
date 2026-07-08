@@ -1,5 +1,9 @@
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
+
+from utils.file_service import format_file_size
 
 from utils.auth import require_manager, show_user_sidebar
 from utils.format_helpers import (
@@ -291,6 +295,75 @@ with tab2:
             use_container_width=True,
             hide_index=True,
         )
+
+        st.markdown("### جزئیات گزارش‌ها و پیوست‌ها")
+
+        for row in submitted_rows:
+            expander_title = (
+                f"{row['user_full_name']} | "
+                f"{row['project_title']} | "
+                f"{row['status_label']} | "
+                f"{to_jalali_datetime(row['submitted_at'])}"
+            )
+
+            with st.expander(expander_title):
+                st.markdown("#### متن گزارش")
+
+                detail_col1, detail_col2 = st.columns(2)
+
+                with detail_col1:
+                    with st.container(border=True):
+                        st.markdown("##### فعالیت‌های انجام‌شده")
+                        st.write(row["activities_done"] or "ثبت نشده")
+
+                    with st.container(border=True):
+                        st.markdown("##### اقدامات آتی")
+                        st.write(row["next_actions"] or "ثبت نشده")
+
+                with detail_col2:
+                    with st.container(border=True):
+                        st.markdown("##### نتایج حاصل‌شده")
+                        st.write(row["results_achieved"] or "ثبت نشده")
+
+                    with st.container(border=True):
+                        st.markdown("##### شاخص‌ها")
+                        st.write(row["kpi_text"] or "ثبت نشده")
+
+                st.divider()
+
+                st.markdown("#### فایل‌های پیوست")
+
+                files = row.get("files", [])
+
+                if not files:
+                    st.info("برای این گزارش فایل پیوستی ثبت نشده است.")
+
+                for file in files:
+                    file_path = Path(file["file_path"])
+
+                    with st.container(border=True):
+                        st.write(f"**{file['original_filename']}**")
+                        st.caption(f"حجم فایل: {format_file_size(file['file_size'])}")
+
+                        if file_path.exists():
+                            with open(file_path, "rb") as f:
+                                file_bytes = f.read()
+
+                            st.download_button(
+                                label="دانلود فایل پیوست",
+                                data=file_bytes,
+                                file_name=file["original_filename"],
+                                mime="application/octet-stream",
+                                key=(
+                                    f"manager_dashboard_report_{row['report_id']}"
+                                    f"_file_{file['id']}"
+                                ),
+                            )
+                        else:
+                            st.warning(
+                                "فایل در مسیر ذخیره‌شده پیدا نشد. "
+                                "ممکن است فایل از پوشه uploads حذف شده باشد."
+                            )
 
 with tab3:
     st.subheader("کاربران / پروژه‌های بدون گزارش")
