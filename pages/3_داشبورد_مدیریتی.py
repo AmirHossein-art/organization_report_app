@@ -17,9 +17,11 @@ from utils.manager_dashboard_service import (
     get_manager_dashboard_data,
 )
 
-from utils.export_service import build_dashboard_excel
+from utils.export_service import build_dashboard_excel, build_dashboard_word
 
 from utils.ui import setup_page
+
+from utils.ai_service import analyze_reports_with_ai
 
 
 setup_page(
@@ -190,20 +192,77 @@ if not rows:
     st.info("با فیلترهای انتخاب‌شده، داده‌ای برای نمایش وجود ندارد.")
     st.stop()
 
+
 excel_bytes = build_dashboard_excel(
     period=period,
+    rows=rows,
+)
+
+word_bytes = build_dashboard_word(
+    period=period,
+    summary=summary,
     rows=rows,
 )
 
 period_start_for_file = to_jalali_date(period["period_start"]).replace("/", "-")
 period_end_for_file = to_jalali_date(period["period_end"]).replace("/", "-")
 
-st.download_button(
-    label="دانلود خروجی Excel",
-    data=excel_bytes,
-    file_name=f"manager_dashboard_{period_start_for_file}_to_{period_end_for_file}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-)
+st.divider()
+st.subheader("خروجی‌های داشبورد")
+
+export_col1, export_col2 = st.columns(2)
+
+with export_col1:
+    # دکمه دانلود اکسل (بدون نیاز به AI)
+    excel_bytes = build_dashboard_excel(period=period, rows=rows)
+    st.download_button(
+        label="دانلود خروجی Excel 📊",
+        data=excel_bytes,
+        file_name=f"manager_dashboard_{period_start_for_file}_to_{period_end_for_file}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+
+with export_col2:
+    # فرآیند تولید Word با AI
+    if st.button("تحلیل با هوش مصنوعی و تولید Word 🤖", use_container_width=True):
+        with st.spinner("هوش مصنوعی در حال تحلیل گزارش‌هاست... لطفاً چند لحظه صبر کنید."):
+            
+            # ۱. جمع‌آوری و فرمت‌بندی متن گزارش‌ها برای ارسال به AI
+            reports_text_for_ai = ""
+            for row in rows:
+                if row["has_report"] and not row["is_late"]:
+                    reports_text_for_ai += f"پروژه: {row['project_title']} | کاربر: {row['user_full_name']}\n"
+                    reports_text_for_ai += f"فعالیت‌ها: {row.get('activities_done', '')}\n"
+                    reports_text_for_ai += f"نتایج: {row.get('results_achieved', '')}\n"
+                    reports_text_for_ai += f"چالش‌ها/اقدامات: {row.get('next_actions', '')}\n"
+                    reports_text_for_ai += "-" * 20 + "\n"
+            
+            # ۲. دریافت تحلیل از AI
+            ai_result = "گزارشی برای تحلیل یافت نشد."
+            if reports_text_for_ai.strip():
+                ai_result = analyze_reports_with_ai(period["title"], reports_text_for_ai)
+            
+            # ۳. ساخت فایل Word و ذخیره در سشن
+            word_bytes = build_dashboard_word(
+                period=period,
+                summary=summary,
+                rows=rows,
+                ai_summary=ai_result
+            )
+            st.session_state["ready_word_bytes"] = word_bytes
+
+    # اگر فایل آماده شده باشد، دکمه دانلود نمایش داده می‌شود
+    if "ready_word_bytes" in st.session_state:
+        st.success("تحلیل با موفقیت انجام شد! فایل Word آماده دانلود است.")
+        st.download_button(
+            label="دانلود فایل Word نهایی 📝",
+            data=st.session_state["ready_word_bytes"],
+            file_name=f"manager_dashboard_{period_start_for_file}_to_{period_end_for_file}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True,
+        )
+
 
 overview_rows = []
 
